@@ -1,10 +1,11 @@
-const {program} = require('commander');
+const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const express = require('express');
 const multer = require('multer');
+const { program } = require('commander');
 
 const app = express();
+const upload = multer();
 app.use(express.json());
 
 program
@@ -14,68 +15,90 @@ program
 
 program.parse(process.argv);
 
-const {host, port, cacheDir} = program.opts();
+const { host, port, cache } = program.opts();
 
-if (!fs.existsSync(cacheDir)) {
-    fs.writeFileSync(cacheDir, JSON.stringify({}));
-    console.log(`Cache file created at ${cacheDir}`);
+if (!fs.existsSync(cache)) {
+    fs.writeFileSync(cache, JSON.stringify([])); // Initialize as an empty array
+    console.log(`Cache file created at ${cache}`);
 } else {
-    console.log(`Cache file found at ${cacheDir}`);
+    console.log(`Cache file found at ${cache}`);
 }
 
-app.get('notes/:name', (req, res) => {
-    const {name} = req.params;
-    const cache = JSON.parse(fs.readFileSync(cacheDir));
-    if (cache[name]) {
-        res.status(200).send(cache[name]);
+app.get('/notes/:name', (req, res) => {
+    const { name } = req.params;
+    const cacheJSON = JSON.parse(fs.readFileSync(cache));
+    if (!Array.isArray(cacheJSON)) {
+        res.status(500).send('Cache is not in the correct format');
+        return;
+    }
+    const note = cacheJSON.find(note => note.name === name);
+    if (note) {
+        res.status(200).send(note);
     } else {
         res.status(404).send('Note not found');
     }
 });
 
 app.put('/notes/:name', (req, res) => {
-    const {name} = req.params;
-    const {content} = req.body;
-    const cache = JSON.parse(fs.readFileSync(cacheDir));
-    if (!cache[name]) {
+    const { name } = req.params;
+    const { content } = req.body;
+    let cacheJSON = JSON.parse(fs.readFileSync(cache));
+    if (!Array.isArray(cacheJSON)) {
+        res.status(500).send('Cache is not in the correct format');
+        return;
+    }
+    const noteIndex = cacheJSON.findIndex(note => note.name === name);
+    if (noteIndex === -1) {
         res.status(404).send('Note not found');
         return;
     }
-    cache[name] = content;
-    fs.writeFileSync(cacheDir, JSON.stringify(cache));
+    cacheJSON[noteIndex].text = content;
+    fs.writeFileSync(cache, JSON.stringify(cacheJSON));
     res.status(200).send('Note saved');
 });
 
 app.delete('/notes/:name', (req, res) => {
-    const {name} = req.params;
-    const cache = JSON.parse(fs.readFileSync(cacheDir));
-    if (!cache[name]) {
+    const { name } = req.params;
+    let cacheJSON = JSON.parse(fs.readFileSync(cache));
+    if (!Array.isArray(cacheJSON)) {
+        res.status(500).send('Cache is not in the correct format');
+        return;
+    }
+    const noteIndex = cacheJSON.findIndex(note => note.name === name);
+    if (noteIndex === -1) {
         res.status(404).send('Note not found');
         return;
     }
-    delete cache[name];
-    fs.writeFileSync(cacheDir, JSON.stringify(cache));
+    cacheJSON.splice(noteIndex, 1);
+    fs.writeFileSync(cache, JSON.stringify(cacheJSON));
     res.status(200).send('Note deleted');
 });
 
 app.get('/notes', (req, res) => {
-    const cache = JSON.parse(fs.readFileSync(cacheDir));
-    res.status(200).send(cache);
+    const cacheJSON = JSON.parse(fs.readFileSync(cache));
+    if (!Array.isArray(cacheJSON)) {
+        res.status(500).send('Cache is not in the correct format');
+        return;
+    }
+    res.status(200).send(cacheJSON);
 });
 
 app.post('/write', upload.none(), (req, res) => {
-    const {note_name, note} = req.body;
-    const cache = JSON.parse(fs.readFileSync(cacheDir));
-    if (cache[note_name]) {
+    const { note_name, note } = req.body;
+    let cacheJSON = JSON.parse(fs.readFileSync(cache));
+    if (!Array.isArray(cacheJSON)) {
+        cacheJSON = [];
+    }
+    if (cacheJSON.some(n => n.name === note_name)) {
         res.status(400).send('Note already exists');
         return;
     }
-    cache[note_name] = note;
-    fs.writeFileSync(cacheDir, JSON.stringify(cache));
+    cacheJSON.push({ name: note_name, text: note });
+    fs.writeFileSync(cache, JSON.stringify(cacheJSON));
     res.status(201).send('Note created');
 });
 
-app.get('/UploadForm.html', (req, res) => {
+app.get('', (req, res) => {
     res.sendFile(path.join(__dirname, 'UploadForm.html'));
 });
 
