@@ -2,6 +2,7 @@ const {program} = require('commander');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const multer = require('multer');
 
 const app = express();
 app.use(express.json());
@@ -55,6 +56,27 @@ app.delete('/notes/:name', (req, res) => {
     delete cache[name];
     fs.writeFileSync(cacheDir, JSON.stringify(cache));
     res.status(200).send('Note deleted');
+});
+
+app.get('/notes', (req, res) => {
+    const cache = JSON.parse(fs.readFileSync(cacheDir));
+    res.status(200).send(cache);
+});
+
+app.post('/write', upload.none(), (req, res) => {
+    const {note_name, note} = req.body;
+    const cache = JSON.parse(fs.readFileSync(cacheDir));
+    if (cache[note_name]) {
+        res.status(400).send('Note already exists');
+        return;
+    }
+    cache[note_name] = note;
+    fs.writeFileSync(cacheDir, JSON.stringify(cache));
+    res.status(201).send('Note created');
+});
+
+app.get('/UploadForm.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'UploadForm.html'));
 });
 
 app.listen(port, host, () => {
