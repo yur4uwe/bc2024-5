@@ -7,6 +7,7 @@ const { program } = require('commander');
 const app = express();
 const upload = multer();
 app.use(express.json());
+app.use(express.static('static'));
 
 program
     .requiredOption('-h, --host <host>', 'host')
@@ -33,7 +34,7 @@ app.get('/notes/:name', (req, res) => {
     }
     const note = cacheJSON.find(note => note.name === name);
     if (note) {
-        res.status(200).send(note);
+        res.status(200).send(note.text);
     } else {
         res.status(404).send('Note not found');
     }
@@ -95,11 +96,7 @@ app.post('/write', upload.none(), (req, res) => {
     }
     cacheJSON.push({ name: note_name, text: note });
     fs.writeFileSync(cache, JSON.stringify(cacheJSON));
-    res.status(201).send('Note created');
-});
-
-app.get('', (req, res) => {
-    res.sendFile(path.join(__dirname, 'UploadForm.html'));
+    res.status(201).send('Note saved');
 });
 
 app.listen(port, host, () => {
